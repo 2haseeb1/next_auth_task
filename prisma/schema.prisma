@@ -1,0 +1,125 @@
+// prisma/schema.prisma
+
+// Learn more about Prisma schema: https://pris.ly/d/prisma-schema
+// For your specific database (e.g., PostgreSQL, MySQL, SQLite, MongoDB),
+// change the provider and update the DATABASE_URL in .env
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Example: Use "postgresql", "mysql", "sqlite", "mongodb" etc.
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id        String    @id @default(uuid()) // UUID for IDs
+  userName  String
+  email     String    @unique
+  password  String    // Hashed password (REQUIRED field)
+  roles     String[]  @default(["user"]) // Example: array of strings for roles (e.g., "admin", "editor", "user")
+  bio       String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  ideas     Idea[]    // A user can have many ideas
+  projects  Project[] // A user can be assigned to many projects (or own many projects)
+  tasks     Task[]    // A user can be assigned to many tasks
+
+  @@map("users") // Maps this model to a "users" table/collection in the database
+}
+
+// Idea Model
+model Idea {
+  id              String         @id @default(uuid())
+  title           String
+  description     String?
+  status          IdeaStatus     @default(Draft)
+  tags            String[]       @default([]) // Example: array of strings for tags
+  priority        IdeaPriority?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  userId          String
+  user            User           @relation(fields: [userId], references: [id]) // Relation to User
+  convertedToProject Project?     @relation("IdeaToProject") // One-to-one relation if an idea can be converted to a single project
+
+  @@map("ideas")
+  @@unique([title])
+}
+
+enum IdeaStatus {
+  Draft
+  Prioritized
+  Archived
+  ConvertedToProject
+}
+
+enum IdeaPriority {
+  Low
+  Medium
+  High
+}
+
+// Project Model
+model Project {
+  id            String         @id @default(uuid())
+  name          String         @unique
+  description   String?
+  status        ProjectStatus  @default(Planning)
+  startDate     DateTime?
+  endDate       DateTime?
+  budget        Float?         // Using Float for currency
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // For project ownership, if a user owns a project
+  ownerId       String?
+  owner         User?          @relation(fields: [ownerId], references: [id])
+
+  assignedToUserIds String[] // Store IDs of assigned users
+  // You might want a many-to-many relationship table if full User objects are needed
+  // assignedUsers   User[] @relation("ProjectAssignees") // Requires explicit join table or implicit relation
+
+  tasks         Task[] // A project can have many tasks
+  ideaId        String? @unique // One-to-one if a project originates from exactly one idea
+  idea          Idea?   @relation("IdeaToProject", fields: [ideaId], references: [id]) // Relation to Idea
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  Planning
+  InProgress
+  OnHold
+  Completed
+  Cancelled
+}
+
+// Task Model
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus @default(Todo)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id]) // Relation to Project
+
+  assignedToId String?
+  assignedTo   User?      @relation(fields: [assignedToId], references: [id]) // Relation to User
+
+  @@map("tasks")
+ @@unique([projectId, title])
+}
+
+enum TaskStatus {
+  Todo
+  InProgress
+  Done
+  Blocked
+}
