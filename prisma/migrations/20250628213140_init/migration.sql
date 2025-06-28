@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "IdeaStatus" AS ENUM ('Draft', 'Prioritized', 'Archived', 'ConvertedToProject');
+CREATE TYPE "IdeaStatus" AS ENUM ('Draft', 'Prioritized', 'Archived', 'ConvertedToProject', 'Implemented');
 
 -- CreateEnum
 CREATE TYPE "IdeaPriority" AS ENUM ('Low', 'Medium', 'High');
