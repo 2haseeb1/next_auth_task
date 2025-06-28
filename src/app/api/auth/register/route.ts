@@ -1,94 +1,70 @@
+
 // src/app/api/auth/register/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // Your Prisma client instance
-import bcrypt from "bcryptjs"; // For password hashing
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+import { serverSetAuthSession } from "@/lib/auth.server";
+import type { RegisterData, AuthResponse } from "@/types/auth"; // Import RegisterData type
 
-// Import types for incoming registration data and the User model
-import type { RegisterData } from "@/types/auth"; // Assuming you'll define this type
-import type { User } from "@/types/index"; // The User type from your index.d.ts
-
-/**
- * POST /api/auth/register
- * Handles user registration.
- */
 export async function POST(request: NextRequest) {
   try {
-    const { userName, email, password, bio, roles }: RegisterData =
-      await request.json();
+    const { userName, email, password, bio, roles }: RegisterData = await request.json(); // Destructure bio and roles
 
     // Basic validation
-    if (!userName || !email || !password) {
-      return NextResponse.json(
-        { message: "User name, email, and password are required." },
-        { status: 400 }
-      );
+    if (!email || !password) {
+      return NextResponse.json({ message: "Email and password are required" }, { status: 400 });
+    }
+    if (password.length < 6) {
+      return NextResponse.json({ message: "Password must be at least 6 characters long" }, { status: 400 });
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10); // 10 is the salt rounds
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingUser) {
+      return NextResponse.json({ message: "User with this email already exists" }, { status: 409 });
+    }
 
-    // Default roles if not provided, or ensure it's an array
-    const userRoles =
-      Array.isArray(roles) && roles.length > 0 ? roles : ["USER"];
-    const userBio = bio !== undefined ? bio : null; // Handle optional bio
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    try {
-      // Create the user in the database
-      const newUser = await prisma.user.create({
-        data: {
-          userName,
-          email,
-          password: hashedPassword, // Store the hashed password
-          bio: userBio,
-          roles: userRoles, // Assign roles
-        },
-        select: {
-          // Select fields to return, NEVER include password here
-          id: true,
-          userName: true,
-          email: true,
-          roles: true,
-          bio: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        userName: userName || email.split('@')[0], // Default userName if not provided
+        bio: bio || null, // Include bio if provided, else null
+        roles: roles || ['user'], // Default role to 'user' if not provided
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
 
-      // Construct a response object that conforms to your User type
-      const responseUser: User = {
+    // In a real application, you would generate a JWT token here
+    // For now, we'll use a dummy token and set a mock session
+    const dummyToken = `dummy-jwt-for-${newUser.id}`;
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // Token expires in 24 hours
+
+    await serverSetAuthSession(dummyToken, expires);
+
+    // Return a response that matches AuthResponse
+    const authResponse: AuthResponse = {
+      message: "Registration successful",
+      user: {
         id: newUser.id,
-        userName: newUser.userName,
+        name: newUser.userName || newUser.email, // Use userName or email as display name
         email: newUser.email,
-        roles: newUser.roles,
-        bio: newUser.bio,
-        createdAt: newUser.createdAt.toISOString(),
-        updatedAt: newUser.updatedAt.toISOString(),
-      };
+      },
+      token: dummyToken,
+      expires: expires.toISOString(),
+    };
 
-      return NextResponse.json(responseUser, { status: 201 }); // 201 Created
-    } catch (error: unknown) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        // P2002 is the error code for unique constraint violation
-        if (error.code === "P2002") {
-          return NextResponse.json(
-            { message: "Email already exists." },
-            { status: 409 }
-          ); // 409 Conflict
-        }
-      }
-      console.error("Registration error:", error);
-      return NextResponse.json(
-        { message: "Failed to register user." },
-        { status: 500 }
-      );
-    }
+    return NextResponse.json(authResponse, { status: 201 });
   } catch (error) {
-    console.error("Request parsing error during registration:", error);
-    return NextResponse.json(
-      { message: "Invalid request data." },
-      { status: 400 }
-    );
+    console.error("Registration error:", error);
+    if (error instanceof Error) {
+      return NextResponse.json({ message: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ message: "An unknown error occurred during registration" }, { status: 500 });
   }
 }

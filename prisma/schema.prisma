@@ -54,6 +54,8 @@ enum IdeaStatus {
   Prioritized
   Archived
   ConvertedToProject
+  Implemented
+  
 }
 
 enum IdeaPriority {

@@ -1,85 +1,95 @@
 // src/lib/authMiddleware.ts
 import { NextRequest, NextResponse } from "next/server";
-import { User, UserSession } from "../types/index";
-import { jwtVerify } from "jose";
+// FIX: Removed 'Session' import as it's no longer directly used in this file
+// import type { Session } from "@/types/auth";
+import { jwtVerify } from "jose"; // For JWT verification
 
-const AUTH_SECRET = process.env.AUTH_SECRET;
+const AUTH_SECRET = process.env.AUTH_SECRET; // This should be a strong, secret key
 
-// Add 'export' here
-export interface AuthenticatedRequest extends NextRequest {
-  userSession?: UserSession;
-}
+// Define the paths that require authentication
+// Adjust these to match your application's protected routes
+const protectedRoutes = [
+  "/profile",
+  "/ideas",
+  "/ideas/new",
+  "/ideas/[id]",
+  "/projects",
+  "/projects/new",
+  "/projects/[id]",
+  "/tasks",
+  "/tasks/new",
+  "/tasks/[id]",
+  // Add any API routes that require authentication
+  "/api/ideas",
+  "/api/ideas/[id]",
+  "/api/projects",
+  "/api/projects/[id]",
+  "/api/tasks",
+  "/api/tasks/[id]",
+  "/api/auth/profile", // Your profile API route
+];
 
-type MiddlewareHandler = (
-  req: AuthenticatedRequest,
-  context: { params: { [key: string]: string | string[] } }
-) => Promise<NextResponse>;
+// Middleware function to handle authentication and authorization
+export async function authMiddleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
 
-export const authMiddleware = (handler: MiddlewareHandler) => {
-  return async (
-    req: AuthenticatedRequest,
-    context: { params: { [key: string]: string | string[] } }
-  ) => {
-    let userSession: UserSession | null = null;
-
-    try {
-      const authHeader = req.headers.get("authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-
-        if (!AUTH_SECRET) {
-          console.error(
-            "AUTH_SECRET is not defined. JWT verification cannot proceed."
-          );
-          return NextResponse.json(
-            { message: "Server configuration error" },
-            { status: 500 }
-          );
-        }
-
-        try {
-          const { payload } = await jwtVerify(
-            token,
-            new TextEncoder().encode(AUTH_SECRET)
-          );
-
-          const simulatedUser: User = {
-              id: payload.userId as string,
-              email: payload.email as string,
-              userName: payload.userName as string,
-              createdAt: new Date(payload.createdAt as string).toISOString(),
-              updatedAt: new Date(payload.updatedAt as string).toISOString(),
-              roles: [],
-              bio: null
-          };
-          // Note: If your JWT payload doesn't contain all User fields,
-          // you might need to fetch the full user from the database here.
-          userSession = { token: token, user: simulatedUser };
-        } catch (jwtError) {
-          console.error("JWT verification failed:", jwtError);
-          return NextResponse.json(
-            { message: "Invalid or expired token" },
-            { status: 401 }
-          );
-        }
-      }
-
-      if (!userSession || !userSession.user) {
-        return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-      }
-
-      req.userSession = userSession;
-    } catch (error) {
-      console.error(
-        "An unexpected error occurred during authentication:",
-        error
+  // If the path is not a protected route, allow the request to proceed
+  const isProtectedRoute = protectedRoutes.some((route) => {
+    // Basic check for dynamic routes
+    if (
+      route.includes("[id]") ||
+      route.includes("[projectId]") ||
+      route.includes("[taskId]")
+    ) {
+      // Regex to match dynamic segments. Example: /ideas/abc-123 should match /ideas/[id]
+      const regexRoute = new RegExp(
+        `^${route.replace(/\[[^\]]+\]/g, "[^/]+")}$`
       );
-      return NextResponse.json(
-        { message: "Internal Server Error during auth" },
-        { status: 500 }
-      );
+      return regexRoute.test(pathname);
     }
+    return pathname === route || pathname.startsWith(`${route}/`);
+  });
 
-    return handler(req, context);
-  };
-};
+  if (!isProtectedRoute) {
+    return NextResponse.next();
+  }
+
+  // Get the token from the cookie
+  const token = request.cookies.get("auth_token")?.value;
+
+  // If no token, redirect to login page
+  if (!token) {
+    // For API routes, return a 401 Unauthorized response
+    if (pathname.startsWith("/api")) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+    // For page routes, redirect to login
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", pathname); // Add callback URL
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // Verify the token
+  if (!AUTH_SECRET) {
+    console.error("AUTH_SECRET is not defined in environment variables.");
+    return NextResponse.json(
+      { message: "Server configuration error" },
+      { status: 500 }
+    );
+  }
+
+  const secret = new TextEncoder().encode(AUTH_SECRET);
+
+  try {
+    await jwtVerify(token, secret); // Just verify, no need to capture payload if not used
+  } catch (error) {
+    console.error("Token verification failed:", error);
+    // If token verification fails, clear the cookie and redirect to login
+    const response = NextResponse.redirect(new URL("/login", request.url));
+    response.cookies.delete("auth_token");
+    return response;
+  }
+
+  // If authenticated and authorized, proceed with the request
+  return NextResponse.next();
+}

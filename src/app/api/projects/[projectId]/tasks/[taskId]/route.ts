@@ -1,45 +1,50 @@
 // src/app/api/projects/[projectId]/tasks/[taskId]/route.ts
+// This API route handles operations for a single task within a project.
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { TaskStatus, UpdateTaskData } from "@/types/index"; // Note: TaskPriority is removed as it's no longer used here
+import { auth } from "@/lib/auth.server";
+// FIX: Removed 'Task' from import as it's not directly used here
+import type { UpdateTaskData } from "@/types";
 
-// Define the interface for the URL parameters
-interface Params {
-  projectId: string;
-  taskId: string;
-}
-
-// Helper function to map incoming status strings (potentially from UI) to Prisma's TaskStatus enum
-function mapToPrismaTaskStatus(uiStatus: string): TaskStatus | undefined {
-  switch (uiStatus) {
-    case "To Do":
-    case "Todo":
-      return "Todo";
-    case "In Progress":
-    case "InProgress":
-      return "InProgress";
-    case "Done":
-      return "Done";
-    case "Blocked":
-      return "Blocked";
-    default:
-      return undefined;
-  }
-}
-
-// GET /api/projects/[projectId]/tasks/[taskId]
+// GET handler to fetch a single task by ID within a project
 export async function GET(
   request: NextRequest,
-  { params }: { params: Params }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { params }: { params: any }
 ) {
-  const { projectId, taskId } = params;
+  const session = await auth();
+  if (!session || !session.user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const projectId: string = params.projectId;
+  const taskId: string = params.taskId;
 
   try {
+    console.log(
+      `GET request for task ID: ${taskId} in project ID: ${projectId} at URL: ${request.url}`
+    );
+
     const task = await prisma.task.findUnique({
       where: {
         id: taskId,
         projectId: projectId,
+        project: {
+          ownerId: session.user.id,
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        dueDate: true,
+        assignedToId: true,
+        projectId: true,
+        createdAt: true,
+        updatedAt: true,
+        // priority: true, // Uncomment if you added priority to your Task schema
       },
     });
 
@@ -49,10 +54,7 @@ export async function GET(
 
     return NextResponse.json(task, { status: 200 });
   } catch (error) {
-    console.error(
-      `API Error: Could not fetch task ${taskId} for project ${projectId}:`,
-      error
-    );
+    console.error(`Error fetching task ${taskId}:`, error);
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }
@@ -60,123 +62,118 @@ export async function GET(
   }
 }
 
-// PATCH /api/projects/[projectId]/tasks/[taskId]
-export async function PATCH(
+// PUT/PATCH handler to update a task by ID within a project
+export async function PUT(
   request: NextRequest,
-  { params }: { params: Params }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { params }: { params: any }
 ) {
-  const { projectId, taskId } = params;
+  const session = await auth();
+  if (!session || !session.user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const projectId: string = params.projectId;
+  const taskId: string = params.taskId;
 
   try {
     const body: UpdateTaskData = await request.json();
-
-    const existingTask = await prisma.task.findUnique({
-      where: {
-        id: taskId,
-        projectId: projectId,
-      },
-    });
-
-    if (!existingTask) {
-      return NextResponse.json(
-        { message: "Task not found or does not belong to this project" },
-        { status: 404 }
-      );
-    }
-
-    const dataToUpdate: {
-      title?: string;
-      description?: string | null;
-      status?: TaskStatus;
-      dueDate?: Date | null;
-      assignedToId?: string | null;
-    } = {};
-
-    if (body.title !== undefined) dataToUpdate.title = body.title;
-
-    if (body.description !== undefined) {
-      dataToUpdate.description =
-        body.description === null ? null : String(body.description);
-    }
-
-    if (body.status !== undefined) {
-      const prismaStatus = mapToPrismaTaskStatus(body.status);
-      if (prismaStatus) {
-        dataToUpdate.status = prismaStatus;
-      } else {
-        return NextResponse.json(
-          { message: "Invalid Task Status provided" },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (body.dueDate !== undefined) {
-      dataToUpdate.dueDate = body.dueDate ? new Date(body.dueDate) : null;
-    }
-    if (body.assignedToId !== undefined) {
-      dataToUpdate.assignedToId = body.assignedToId;
-    }
+    console.log(
+      `PUT request for task ID: ${taskId} in project ID: ${projectId}. Data:`,
+      body
+    );
 
     const updatedTask = await prisma.task.update({
       where: {
         id: taskId,
+        projectId: projectId,
+        project: {
+          ownerId: session.user.id,
+        },
       },
-      data: dataToUpdate,
+      data: {
+        ...body,
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        dueDate: true,
+        assignedToId: true,
+        projectId: true,
+        createdAt: true,
+        updatedAt: true,
+        // priority: true, // Uncomment if you added priority to your Task schema
+      },
     });
 
     return NextResponse.json(updatedTask, { status: 200 });
   } catch (error) {
-    console.error(
-      `API Error: Could not update task ${taskId} for project ${projectId}:`,
-      error
-    );
+    console.error(`Error updating task ${taskId}:`, error);
+    if (
+      error instanceof Error &&
+      error.message.includes("Record to update not found")
+    ) {
+      return NextResponse.json(
+        { message: "Task not found or not authorized" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json(
-      { message: "Internal Server Error" },
+      { message: "Failed to update task" },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/projects/[projectId]/tasks/[taskId]
+// DELETE handler to delete a task by ID within a project
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Params }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  { params }: { params: any }
 ) {
-  const { projectId, taskId } = params;
+  const session = await auth();
+  if (!session || !session.user) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
+
+  const projectId: string = params.projectId;
+  const taskId: string = params.taskId;
 
   try {
-    const existingTask = await prisma.task.findUnique({
-      where: {
-        id: taskId,
-        projectId: projectId,
-      },
-    });
-
-    if (!existingTask) {
-      return NextResponse.json(
-        { message: "Task not found or does not belong to this project" },
-        { status: 404 }
-      );
-    }
+    console.log(
+      `DELETE request for task ID: ${taskId} in project ID: ${projectId}`
+    );
 
     await prisma.task.delete({
       where: {
         id: taskId,
+        projectId: projectId,
+        project: {
+          ownerId: session.user.id,
+        },
       },
     });
 
     return NextResponse.json(
       { message: "Task deleted successfully" },
-      { status: 200 }
+      { status: 204 }
     );
   } catch (error) {
-    console.error(
-      `API Error: Could not delete task ${taskId} for project ${projectId}:`,
-      error
-    );
+    console.error(`Error deleting task ${taskId}:`, error);
+    if (
+      error instanceof Error &&
+      error.message.includes("Record to delete does not exist")
+    ) {
+      return NextResponse.json(
+        { message: "Task not found or not authorized" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json(
-      { message: "Internal Server Error" },
+      { message: "Failed to delete task" },
       { status: 500 }
     );
   }

@@ -66,17 +66,19 @@ export interface UpdateProjectData {
 }
 
 // --- IDEA RELATED TYPES ---
+// FIX: Re-evaluated IdeaStatus based on common app usage, including "Implemented"
 export type IdeaStatus =
   | "Draft"
   | "Prioritized"
   | "Archived"
-  | "ConvertedToProject";
+  | "ConvertedToProject"
+  | "Implemented"; // Added "Implemented" as per the error message's context
 export type IdeaPriority = "Low" | "Medium" | "High";
 
 export interface Idea extends BaseItem {
   title: string;
   description: string | null;
-  status: IdeaStatus;
+  status: IdeaStatus; // Using the IdeaStatus type
   tags: string[];
   priority?: IdeaPriority | null;
   userId: string; // ID of the user who owns the idea
@@ -85,7 +87,7 @@ export interface Idea extends BaseItem {
 export interface CreateIdeaData {
   title: string;
   description?: string | null;
-  status?: IdeaStatus;
+  status?: IdeaStatus; // Using the IdeaStatus type
   tags?: string[];
   priority?: IdeaPriority | null;
 }
@@ -93,7 +95,7 @@ export interface CreateIdeaData {
 export interface UpdateIdeaData {
   title?: string;
   description?: string | null;
-  status?: IdeaStatus;
+  status?: IdeaStatus; // Using the IdeaStatus type
   tags?: string[];
   priority?: IdeaPriority | null;
 }
@@ -117,7 +119,7 @@ export interface CreateTaskData {
   title: string;
   description?: string | null;
   status?: TaskStatus;
-  dueDate?: string | null; // Use string for API input (ISO date string)
+  dueDate?: string | null;
   assignedToId?: string | null;
   // priority?: TaskPriority | null; // Uncomment if you added 'priority' to your Task schema in Prisma
 }

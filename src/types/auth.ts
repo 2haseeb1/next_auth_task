@@ -17,6 +17,8 @@ export interface RegisterData {
   email: string;
   password: string;
   userName?: string;
+  bio?: string | null; // <<<--- ADDED: Optional bio field
+  roles?: string[]; // <<<--- ADDED: Optional roles field
 }
 
 export interface AuthResponse {
