@@ -4,41 +4,44 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { auth } from '@/lib/auth.server'; // Server-side authentication
-import { prisma } from '@/lib/prisma'; // Prisma client
-import { redirect } from 'next/navigation'; // For unauthenticated access
-import { formatDate } from '@/lib/utils'; // Assuming you have formatDate utility
+import { auth } from '@/lib/auth.server';
+import { prisma } from '@/lib/prisma';
+import { redirect } from 'next/navigation';
+import { formatDate } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'My Projects - SparkBoard',
   description: 'Manage your projects and track their progress.',
 };
 
-// Define the props for this page
-interface ProjectsPageProps {
-  // FIX: Use 'any' for searchParams to bypass the build error
+// FIX: Define props inline with 'any' for searchParams
+export default async function ProjectsPage(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  searchParams?: any; // For query parameters like ?page=1
-  // params?: any; // Include params if it's potentially a dynamic route, but generally not for /projects
-}
-
-export default async function ProjectsPage({ searchParams }: ProjectsPageProps) {
-  const session = await auth(); // Get the current session
+  { searchParams }: { searchParams?: any }
+) {
+  const session = await auth();
 
   if (!session || !session.user) {
-    redirect('/login'); // Redirect unauthenticated users
+    redirect('/login');
   }
 
-  // You can still access searchParams properties, they will be of type string or string[]
-  const page = parseInt(searchParams?.page as string || '1', 10);
-  const pageSize = parseInt(searchParams?.pageSize as string || '10', 10);
+  // FIX: Cast searchParams to a known object structure immediately
+  // This bypasses the strict Promise-like check.
+  const queryParams = searchParams as { page?: string, pageSize?: string };
+
+  const currentPage = (queryParams?.page) ? parseInt(queryParams.page, 10) : 1;
+  const currentPerPage = (queryParams?.pageSize) ? parseInt(queryParams.pageSize, 10) : 10;
+  
+  const page = isNaN(currentPage) || currentPage < 1 ? 1 : currentPage;
+  const pageSize = isNaN(currentPerPage) || currentPerPage < 1 ? 10 : currentPerPage;
+  
   const skip = (page - 1) * pageSize;
 
   let projects = [];
   try {
     projects = await prisma.project.findMany({
       where: {
-        ownerId: session.user.id, // Fetch projects only for the authenticated user
+        ownerId: session.user.id,
       },
       take: pageSize,
       skip: skip,
@@ -48,7 +51,6 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
     });
   } catch (error) {
     console.error('Error fetching projects:', error);
-    // Handle error, maybe show a message or redirect
     return (
       <div className="container mx-auto p-8 max-w-4xl text-center text-red-600">
         <p>Failed to load projects. Please try again later.</p>
@@ -95,7 +97,6 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
         </div>
       )}
 
-      {/* Basic Pagination Example (client-side implementation would be better for interactive) */}
       <div className="flex justify-center mt-8 space-x-4">
         {page > 1 && (
           <Link href={`/projects?page=${page - 1}&pageSize=${pageSize}`} passHref>
@@ -103,7 +104,7 @@ export default async function ProjectsPage({ searchParams }: ProjectsPageProps) 
           </Link>
         )}
         <span className="self-center text-gray-700">Page {page}</span>
-        {projects.length === pageSize && ( // Simple check if there might be more pages
+        {projects.length === pageSize && (
           <Link href={`/projects?page=${page + 1}&pageSize=${pageSize}`} passHref>
             <button className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100">Next</button>
           </Link>
