@@ -14,10 +14,10 @@ export const metadata: Metadata = {
   description: 'Manage your projects and track their progress.',
 };
 
-// FIX: Define props inline with 'any' for searchParams
+// FIX: Define props inline, still allowing 'any' as a fallback if strict typing fails again
 export default async function ProjectsPage(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { searchParams }: { searchParams?: any }
+  { searchParams }: { searchParams?: any } 
 ) {
   const session = await auth();
 
@@ -25,12 +25,13 @@ export default async function ProjectsPage(
     redirect('/login');
   }
 
-  // FIX: Cast searchParams to a known object structure immediately
-  // This bypasses the strict Promise-like check.
-  const queryParams = searchParams as { page?: string, pageSize?: string };
+  // FIX: Explicitly await and then safely access properties from the resolved object
+  // This is the most reliable way to handle searchParams in Server Components
+  const resolvedSearchParams = await Promise.resolve(searchParams);
 
-  const currentPage = (queryParams?.page) ? parseInt(queryParams.page, 10) : 1;
-  const currentPerPage = (queryParams?.pageSize) ? parseInt(queryParams.pageSize, 10) : 10;
+  // Safely parse page and pageSize from the resolved searchParams
+  const currentPage = (typeof resolvedSearchParams?.page === 'string') ? parseInt(resolvedSearchParams.page, 10) : 1;
+  const currentPerPage = (typeof resolvedSearchParams?.pageSize === 'string') ? parseInt(resolvedSearchParams.pageSize, 10) : 10;
   
   const page = isNaN(currentPage) || currentPage < 1 ? 1 : currentPage;
   const pageSize = isNaN(currentPerPage) || currentPerPage < 1 ? 10 : currentPerPage;

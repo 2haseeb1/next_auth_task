@@ -7,7 +7,8 @@ import type { Session } from "@/types/auth"; // Import Session type from shared 
 import type { User } from "@/types"; // Added explicit import for User type to ensure correct mocking
 
 // --- CONFIGURATION / MOCK DATA ---
-const DUMMY_USER_ID = "6c2c36d4-8a4a-443f-aac7-9b619ca84b67"; // <<<--- ENSURE THIS IS YOUR ACTUAL, CURRENT USER ID!
+// FIX: Set DUMMY_USER_ID to match Alice's ID from your seed.ts
+const DUMMY_USER_ID = "e66123d4-dc1b-45fd-8254-c3811c6caf66"; // <<<--- CHANGED TO ALICE'S ID
 const TOKEN_COOKIE_NAME = "auth_token";
 
 /**
@@ -21,12 +22,11 @@ export async function auth(): Promise<Session | null> {
     // Provide dummy values for all required User properties.
     const mockUser: User = {
       id: DUMMY_USER_ID,
-      // FIX: Changed 'name' to 'userName' to match the User interface in src/types/index.ts
-      userName: "Alice Smith", // <<<--- CHANGED THIS FROM 'name'
-      email: "alice@example.com",
+      userName: "Alice Smith", // Keep consistent with Alice's details
+      email: "alice@example.com", // Keep consistent with Alice's details
       createdAt: new Date(),
       updatedAt: new Date(),
-      roles: ["user"],
+      roles: ["admin", "user"], // Keep consistent with Alice's details
       bio: "A default bio for Alice.",
     };
 

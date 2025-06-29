@@ -13,8 +13,6 @@ const TOKEN_COOKIE_NAME = "auth_token";
  * This function is designed to run in the browser environment.
  */
 export function clientSetAuthSession(token: string, expires: Date): void {
-  // <<<--- ENSURE 'export' IS HERE
-  // Directly manipulate `document.cookie` on the client-side.
   document.cookie = `${TOKEN_COOKIE_NAME}=${token}; expires=${expires.toUTCString()}; path=/; Secure; SameSite=Lax`;
   console.log("Mock: Auth session token set in cookie (client-side).");
 }
@@ -24,8 +22,6 @@ export function clientSetAuthSession(token: string, expires: Date): void {
  * This function is designed to run in the browser environment.
  */
 export function clientGetAuthToken(): string | null {
-  // <<<--- ENSURE 'export' IS HERE
-  // Parse `document.cookie` to find the token.
   const name = TOKEN_COOKIE_NAME + "=";
   const decodedCookie = decodeURIComponent(document.cookie);
   const ca = decodedCookie.split(";");
@@ -46,8 +42,6 @@ export function clientGetAuthToken(): string | null {
  * This function is designed to run in the browser environment.
  */
 export function clientClearAuthSession(): void {
-  // <<<--- ENSURE 'export' IS HERE
-  // Set cookie expiration to a past date to effectively delete it.
   document.cookie = `${TOKEN_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
   console.log("Mock: Auth session token cleared from cookie (client-side).");
 }
@@ -59,18 +53,19 @@ export function clientClearAuthSession(): void {
  * to validate the session and get user details.
  */
 export async function clientGetUserSession(): Promise<Session | null> {
-  // <<<--- ENSURE 'export' IS HERE
   const token = clientGetAuthToken();
   if (token) {
-    // Return a User object that EXACTLY matches the User interface from '@/types'.
+    // FIX: Changed mockUser.id to match Alice's ID from your seed.ts
+    // This ensures that when you're "logged in" with the mock user,
+    // your app queries for data that actually exists for Alice.
     const mockUser: User = {
-      id: "mock-client-user-id",
-      userName: "Client User",
-      email: "client@example.com",
+      id: "e66123d4-dc1b-45fd-8254-c3811c6caf66", // <<<--- CHANGED THIS ID
+      userName: "Alice Smith", // Changed to match Alice
+      email: "alice@example.com", // Changed to match Alice
       createdAt: new Date(),
       updatedAt: new Date(),
-      roles: ["user"],
-      bio: "Mock client user bio.",
+      roles: ["admin", "user"], // Roles to match Alice
+      bio: "Mock client user bio for Alice.",
     };
     return {
       user: mockUser,
